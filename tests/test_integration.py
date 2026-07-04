@@ -44,7 +44,14 @@ def test_approved_signal_updates_state(mock_window, mock_rf, full_client):
     with open(tmp_path / "state.json") as f:
         state = json.load(f)
     assert len(state["trades_today"]) == 1
-    assert state["trades_today"][0]["action"] == "BUY"
+    trade = state["trades_today"][0]
+    assert trade["action"] == "BUY"
+    assert trade["zone_hit"] == "london_low"
+    assert trade["result"] == "OPEN"
+
+    log_content = (tmp_path / "signals.log").read_text()
+    assert "BUY" in log_content
+    assert "APPROVED" in log_content
 
 
 @patch("decision_engine._check_red_folder", return_value=False)
@@ -64,4 +71,6 @@ def test_red_folder_blocks_valid_signal(full_client):
     client, _ = full_client
     with patch("decision_engine._check_red_folder", return_value=True):
         r = client.post("/signal", json=VALID_SIGNAL)
+    assert r.status_code == 200
+    assert r.json()["approved"] is False
     assert r.json()["reason"] == "RED_FOLDER"
