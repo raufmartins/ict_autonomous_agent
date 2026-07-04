@@ -32,7 +32,7 @@ def test_record_win_does_not_increment_stops():
     assert get_stops_today() == 0
 
 
-def test_two_stops_then_three_signals_blocked():
+def test_two_stops_increments_counter_to_two():
     from state_manager import record_trade, get_stops_today
     record_trade({"result": "STOP", "r": -1.0, "action": "BUY"})
     record_trade({"result": "STOP", "r": -1.0, "action": "SELL"})
