@@ -10,13 +10,17 @@ from state_manager import record_trade
 
 LOG_FILE = os.path.join(os.path.dirname(__file__), "logs", "signals.log")
 
-os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
+logger = logging.getLogger("ict_trader")
 
-logging.basicConfig(
-    filename=LOG_FILE,
-    level=logging.INFO,
-    format="%(asctime)s %(message)s",
-)
+
+def _configure_logging() -> None:
+    if not logger.handlers:
+        os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
+        handler = logging.FileHandler(LOG_FILE)
+        handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
+        logger.addHandler(handler)
+        logger.setLevel(logging.INFO)
+
 
 app = FastAPI(title="ICT Autonomous Trader")
 
@@ -34,10 +38,11 @@ class SignalPayload(BaseModel):
 
 @app.post("/signal")
 async def receive_signal(payload: SignalPayload):
+    _configure_logging()
     data = payload.model_dump()
     result = process_signal(data)
 
-    logging.info(
+    logger.info(
         "signal asset=%s action=%s zone=%s approved=%s reason=%s",
         payload.asset,
         payload.action,
