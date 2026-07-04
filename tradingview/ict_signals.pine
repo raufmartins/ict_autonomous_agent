@@ -7,12 +7,12 @@ var string WEBHOOK_URL = input.string("", "Webhook URL (ngrok)", tooltip="Cole a
 // ─── Session Range Calculation (via M15 security call) ──────────────────────
 // Asian session: 20:00–00:00 EST  →  16 bars × 15 min
 [asianHigh, asianLow] = request.security(syminfo.tickerid, "15",
-    [ta.highest(high, 16), ta.lowest(low, 16)],
+    [ta.highest(high, 16)[1], ta.lowest(low, 16)[1]],
     lookahead=barmerge.lookahead_on)
 
 // London session: 02:00–05:00 EST  →  12 bars × 15 min  (shifted -18 bars from now)
 [londonHigh, londonLow] = request.security(syminfo.tickerid, "15",
-    [ta.highest(high, 12), ta.lowest(low, 12)],
+    [ta.highest(high, 12)[1], ta.lowest(low, 12)[1]],
     lookahead=barmerge.lookahead_on)
 
 // Previous Day High/Low
@@ -51,17 +51,25 @@ hasFVGBear    = fvgBearTop > fvgBearBottom
 
 // ─── Signal Logic ────────────────────────────────────────────────────────────
 // Sequence: sweep[2] → displacement[1] → FVG formed now
-buySignal  = anySweepBull[2] and isDispBull[1] and hasFVGBull
-sellSignal = anySweepBear[2] and isDispBear[1] and hasFVGBear
+buySignal  = anySweepBull[1] and isDispBull[1] and hasFVGBull
+sellSignal = anySweepBear[1] and isDispBear[1] and hasFVGBear
 
 // ─── Zone Label for Webhook ──────────────────────────────────────────────────
-zoneHitBuy  = sweepBullAsian[2]  ? "asian_low"   :
-              sweepBullLondon[2] ? "london_low"  :
-              sweepBullPDL[2]    ? "pdl"          : "unknown"
+zoneHitBuy  = sweepBullAsian[1]  ? "asian_low"   :
+              sweepBullLondon[1] ? "london_low"  :
+              sweepBullPDL[1]    ? "pdl"          : "unknown"
 
-zoneHitSell = sweepBearAsian[2]  ? "asian_high"  :
-              sweepBearLondon[2] ? "london_high" :
-              sweepBearPDH[2]    ? "pdh"          : "unknown"
+zoneHitSell = sweepBearAsian[1]  ? "asian_high"  :
+              sweepBearLondon[1] ? "london_high" :
+              sweepBearPDH[1]    ? "pdh"          : "unknown"
+
+sweepLevelBuy  = sweepBullAsian[1]  ? asianLow  :
+                 sweepBullLondon[1] ? londonLow :
+                 sweepBullPDL[1]    ? pdl        : na
+
+sweepLevelSell = sweepBearAsian[1]  ? asianHigh  :
+                 sweepBearLondon[1] ? londonHigh :
+                 sweepBearPDH[1]    ? pdh         : na
 
 slBuy  = ta.lowest(low,  3) - syminfo.mintick * 2
 slSell = ta.highest(high, 3) + syminfo.mintick * 2
@@ -78,12 +86,12 @@ if buySignal
         '{"asset":"'    + syminfo.ticker          + '",' +
         '"action":"BUY",'                                +
         '"zone_hit":"'  + zoneHitBuy               + '",' +
-        '"sweep_level":' + str.tostring(asianLow)  + ',' +
+        '"sweep_level":' + str.tostring(sweepLevelBuy)  + ',' +
         '"fvg_top":'    + str.tostring(fvgBullTop)    + ',' +
         '"fvg_bottom":' + str.tostring(fvgBullBottom) + ',' +
         '"sl_level":'   + str.tostring(slBuy)         + ',' +
         '"timestamp":"{{timenow}}"}',
-        alert.freq_once_per_bar
+        alert.freq_once_per_bar_close
     )
 
 if sellSignal
@@ -91,10 +99,10 @@ if sellSignal
         '{"asset":"'    + syminfo.ticker           + '",' +
         '"action":"SELL",'                                +
         '"zone_hit":"'  + zoneHitSell               + '",' +
-        '"sweep_level":' + str.tostring(asianHigh)  + ',' +
+        '"sweep_level":' + str.tostring(sweepLevelSell)  + ',' +
         '"fvg_top":'    + str.tostring(fvgBearTop)    + ',' +
         '"fvg_bottom":' + str.tostring(fvgBearBottom) + ',' +
         '"sl_level":'   + str.tostring(slSell)         + ',' +
         '"timestamp":"{{timenow}}"}',
-        alert.freq_once_per_bar
+        alert.freq_once_per_bar_close
     )
