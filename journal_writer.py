@@ -8,10 +8,11 @@ import pytz
 
 EST = pytz.timezone("America/New_York")
 
-JOURNAL_PATH = os.path.expanduser(
+_DEFAULT_JOURNAL = os.path.expanduser(
     "~/.gemini/antigravity-ide/brain/"
     "36769d48-be96-4b1a-957e-eea8764269d2/ict_trading_journal.md"
 )
+JOURNAL_PATH = os.environ.get("ICT_JOURNAL_PATH", _DEFAULT_JOURNAL)
 LOGS_DIR  = os.path.join(os.path.dirname(__file__), "logs")
 LOG_FILE  = os.path.join(LOGS_DIR, "signals.log")
 STATE_FILE = os.path.join(os.path.dirname(__file__), "state.json")
@@ -21,7 +22,7 @@ REQUIRED_SECTIONS = [
     "Auditoria de Erros e Acertos",
     "Lição do Dia",
 ]
-RETRY_DELAYS = [30, 60, 120]
+RETRY_DELAYS = [30, 60]
 
 
 def write_journal() -> None:
@@ -51,7 +52,7 @@ def write_journal() -> None:
         try:
             entry = _call_with_retry(model, prompt2)
         except Exception as exc:
-            _save_draft(today, entry)
+            _save_draft(today, f"[ERRO na re-tentativa: {exc}]\n\n{entry}")
             return
 
     if not _validate_entry(entry):
@@ -71,10 +72,12 @@ def _read_today_logs(today: str) -> str:
 
 
 def _read_state() -> str:
+    if not os.path.exists(STATE_FILE):
+        return "{}"
     try:
         with open(STATE_FILE) as f:
-            return json.dumps(json.load(f), indent=2, ensure_ascii=False)
-    except FileNotFoundError:
+            return json.dumps(json.load(f), ensure_ascii=False, indent=2)
+    except (json.JSONDecodeError, IOError):
         return "{}"
 
 
@@ -127,5 +130,6 @@ def _save_draft(date: str, content: str) -> None:
 
 
 def _append_to_journal(entry: str) -> None:
+    os.makedirs(os.path.dirname(JOURNAL_PATH), exist_ok=True)
     with open(JOURNAL_PATH, "a") as f:
         f.write(f"\n\n---\n\n{entry}\n")
