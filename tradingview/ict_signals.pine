@@ -1,0 +1,100 @@
+//@version=5
+indicator("ICT Signal Detector", overlay=true, max_lines_count=10, max_labels_count=50)
+
+// ─── Inputs ─────────────────────────────────────────────────────────────────
+var string WEBHOOK_URL = input.string("", "Webhook URL (ngrok)", tooltip="Cole aqui a URL do ngrok: https://xxxx.ngrok.io/signal")
+
+// ─── Session Range Calculation (via M15 security call) ──────────────────────
+// Asian session: 20:00–00:00 EST  →  16 bars × 15 min
+[asianHigh, asianLow] = request.security(syminfo.tickerid, "15",
+    [ta.highest(high, 16), ta.lowest(low, 16)],
+    lookahead=barmerge.lookahead_on)
+
+// London session: 02:00–05:00 EST  →  12 bars × 15 min  (shifted -18 bars from now)
+[londonHigh, londonLow] = request.security(syminfo.tickerid, "15",
+    [ta.highest(high, 12), ta.lowest(low, 12)],
+    lookahead=barmerge.lookahead_on)
+
+// Previous Day High/Low
+[pdh, pdl] = request.security(syminfo.tickerid, "D",
+    [high[1], low[1]],
+    lookahead=barmerge.lookahead_on)
+
+// ─── Sweep Detection (M1) ────────────────────────────────────────────────────
+// Bullish sweep: wick below a zone, body closes back above → BUY candidate
+sweepBullAsian  = low[1] < asianLow   and close[1] > asianLow
+sweepBullLondon = low[1] < londonLow  and close[1] > londonLow
+sweepBullPDL    = low[1] < pdl        and close[1] > pdl
+
+// Bearish sweep: wick above a zone, body closes back below → SELL candidate
+sweepBearAsian  = high[1] > asianHigh  and close[1] < asianHigh
+sweepBearLondon = high[1] > londonHigh and close[1] < londonHigh
+sweepBearPDH    = high[1] > pdh        and close[1] < pdh
+
+anySweepBull = sweepBullAsian or sweepBullLondon or sweepBullPDL
+anySweepBear = sweepBearAsian or sweepBearLondon or sweepBearPDH
+
+// ─── Displacement Detection (current bar) ───────────────────────────────────
+bodySize    = math.abs(close - open)
+totalRange  = high - low
+isDispBull  = close > open and totalRange > 0 and (bodySize / totalRange) >= 0.70
+isDispBear  = close < open and totalRange > 0 and (bodySize / totalRange) >= 0.70
+
+// ─── FVG Detection (3-candle pattern: gap between candle[2] and candle[0]) ──
+fvgBullTop    = low[0]   // gap top    = current candle low
+fvgBullBottom = high[2]  // gap bottom = 2-bars-ago candle high
+hasFVGBull    = fvgBullTop > fvgBullBottom
+
+fvgBearTop    = low[2]   // gap top    = 2-bars-ago candle low
+fvgBearBottom = high[0]  // gap bottom = current candle high
+hasFVGBear    = fvgBearTop > fvgBearBottom
+
+// ─── Signal Logic ────────────────────────────────────────────────────────────
+// Sequence: sweep[2] → displacement[1] → FVG formed now
+buySignal  = anySweepBull[2] and isDispBull[1] and hasFVGBull
+sellSignal = anySweepBear[2] and isDispBear[1] and hasFVGBear
+
+// ─── Zone Label for Webhook ──────────────────────────────────────────────────
+zoneHitBuy  = sweepBullAsian[2]  ? "asian_low"   :
+              sweepBullLondon[2] ? "london_low"  :
+              sweepBullPDL[2]    ? "pdl"          : "unknown"
+
+zoneHitSell = sweepBearAsian[2]  ? "asian_high"  :
+              sweepBearLondon[2] ? "london_high" :
+              sweepBearPDH[2]    ? "pdh"          : "unknown"
+
+slBuy  = ta.lowest(low,  3) - syminfo.mintick * 2
+slSell = ta.highest(high, 3) + syminfo.mintick * 2
+
+// ─── Visuals ─────────────────────────────────────────────────────────────────
+plotshape(buySignal,  title="BUY Signal",  style=shape.triangleup,
+          location=location.belowbar, color=color.green, size=size.normal)
+plotshape(sellSignal, title="SELL Signal", style=shape.triangledown,
+          location=location.abovebar, color=color.red,   size=size.normal)
+
+// ─── Alerts (dispara webhook para o servidor Python) ─────────────────────────
+if buySignal
+    alert(
+        '{"asset":"'    + syminfo.ticker          + '",' +
+        '"action":"BUY",'                                +
+        '"zone_hit":"'  + zoneHitBuy               + '",' +
+        '"sweep_level":' + str.tostring(asianLow)  + ',' +
+        '"fvg_top":'    + str.tostring(fvgBullTop)    + ',' +
+        '"fvg_bottom":' + str.tostring(fvgBullBottom) + ',' +
+        '"sl_level":'   + str.tostring(slBuy)         + ',' +
+        '"timestamp":"{{timenow}}"}',
+        alert.freq_once_per_bar
+    )
+
+if sellSignal
+    alert(
+        '{"asset":"'    + syminfo.ticker           + '",' +
+        '"action":"SELL",'                                +
+        '"zone_hit":"'  + zoneHitSell               + '",' +
+        '"sweep_level":' + str.tostring(asianHigh)  + ',' +
+        '"fvg_top":'    + str.tostring(fvgBearTop)    + ',' +
+        '"fvg_bottom":' + str.tostring(fvgBearBottom) + ',' +
+        '"sl_level":'   + str.tostring(slSell)         + ',' +
+        '"timestamp":"{{timenow}}"}',
+        alert.freq_once_per_bar
+    )
