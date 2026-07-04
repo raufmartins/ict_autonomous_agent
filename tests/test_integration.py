@@ -69,7 +69,8 @@ def test_two_stops_block_third_signal(mock_window, mock_rf, full_client):
 
 def test_red_folder_blocks_valid_signal(full_client):
     client, _ = full_client
-    with patch("decision_engine._check_red_folder", return_value=True):
+    with patch("decision_engine._in_trading_window", return_value=True), \
+         patch("decision_engine._check_red_folder", return_value=True):
         r = client.post("/signal", json=VALID_SIGNAL)
     assert r.status_code == 200
     assert r.json()["approved"] is False

@@ -1,6 +1,6 @@
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import FastAPI
 from pydantic import BaseModel
@@ -33,7 +33,11 @@ class SignalPayload(BaseModel):
     fvg_top: float
     fvg_bottom: float
     sl_level: float
-    timestamp: datetime
+    timestamp: datetime = None
+
+    def model_post_init(self, __context):
+        if self.timestamp is None:
+            self.timestamp = datetime.now(timezone.utc)
 
 
 @app.post("/signal")
@@ -44,9 +48,9 @@ async def receive_signal(payload: SignalPayload):
 
     logger.info(
         "signal asset=%s action=%s zone=%s approved=%s reason=%s",
-        payload.asset,
-        payload.action,
-        payload.zone_hit,
+        payload.asset.replace("\n", ""),
+        payload.action.replace("\n", ""),
+        payload.zone_hit.replace("\n", ""),
         result["approved"],
         result["reason"],
     )

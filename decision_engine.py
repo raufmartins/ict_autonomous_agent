@@ -1,7 +1,10 @@
+import logging
 from datetime import datetime, timedelta
 import httpx
 import pytz
 from state_manager import get_stops_today
+
+logger = logging.getLogger("ict_trader")
 
 EST = pytz.timezone("America/New_York")
 FOREX_FACTORY_URL = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
@@ -11,10 +14,12 @@ DAILY_STOP_LIMIT = 2
 
 
 def process_signal(payload: dict) -> dict:
-    if _check_red_folder():
-        return {"approved": False, "reason": "RED_FOLDER"}
+    if payload.get("action") not in {"BUY", "SELL"}:
+        return {"approved": False, "reason": "INVALID_ACTION"}
     if not _in_trading_window():
         return {"approved": False, "reason": "OUTSIDE_WINDOW"}
+    if _check_red_folder():
+        return {"approved": False, "reason": "RED_FOLDER"}
     valid, reason = _validate_fvg(payload)
     if not valid:
         return {"approved": False, "reason": reason}
@@ -30,8 +35,10 @@ def _check_red_folder(now: datetime = None) -> bool:
         response = httpx.get(FOREX_FACTORY_URL, timeout=5.0)
         response.raise_for_status()
         events = response.json()
-    except Exception:
+    except Exception as exc:
+        logger.warning("Red Folder API error (failing safe): %s", exc)
         return True  # fail safe: block on API error
+    window_start = now - timedelta(minutes=30)
     window_end = now + timedelta(minutes=30)
     for event in events:
         if event.get("impact") != "High":
@@ -40,7 +47,7 @@ def _check_red_folder(now: datetime = None) -> bool:
             event_time = datetime.fromisoformat(event["date"]).astimezone(EST)
         except (KeyError, ValueError):
             continue
-        if now <= event_time <= window_end:
+        if window_start <= event_time <= window_end:
             return True
     return False
 

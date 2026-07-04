@@ -90,7 +90,7 @@ if buySignal
         '"fvg_top":'    + str.tostring(fvgBullTop)    + ',' +
         '"fvg_bottom":' + str.tostring(fvgBullBottom) + ',' +
         '"sl_level":'   + str.tostring(slBuy)         + ',' +
-        '"timestamp":"{{timenow}}"}',
+        '"timestamp":' + str.tostring(time) + '}',
         alert.freq_once_per_bar_close
     )
 
@@ -103,6 +103,6 @@ if sellSignal
         '"fvg_top":'    + str.tostring(fvgBearTop)    + ',' +
         '"fvg_bottom":' + str.tostring(fvgBearBottom) + ',' +
         '"sl_level":'   + str.tostring(slSell)         + ',' +
-        '"timestamp":"{{timenow}}"}',
+        '"timestamp":' + str.tostring(time) + '}',
         alert.freq_once_per_bar_close
     )

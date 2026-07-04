@@ -103,21 +103,29 @@ def test_all_clear_returns_approved(mock_stops, mock_window, mock_rf):
     assert result["reason"] == "APPROVED"
 
 
+@patch("decision_engine._in_trading_window", return_value=True)
 @patch("decision_engine._check_red_folder", return_value=True)
-def test_red_folder_rejects(mock_rf):
+def test_red_folder_rejects(mock_rf, mock_window):
     from decision_engine import process_signal
     result = process_signal(VALID_BUY)
     assert result["approved"] is False
     assert result["reason"] == "RED_FOLDER"
 
 
-@patch("decision_engine._check_red_folder", return_value=False)
 @patch("decision_engine._in_trading_window", return_value=False)
-def test_outside_window_rejects(mock_window, mock_rf):
+def test_outside_window_rejects(mock_window):
     from decision_engine import process_signal
     result = process_signal(VALID_BUY)
     assert result["approved"] is False
     assert result["reason"] == "OUTSIDE_WINDOW"
+
+
+def test_invalid_action_rejects():
+    from decision_engine import process_signal
+    bad = {**VALID_BUY, "action": "HOLD"}
+    result = process_signal(bad)
+    assert result["approved"] is False
+    assert result["reason"] == "INVALID_ACTION"
 
 
 @patch("decision_engine._check_red_folder", return_value=False)
@@ -153,6 +161,26 @@ def test_check_red_folder_returns_true_when_high_impact_in_window():
         mock_get.return_value.raise_for_status = lambda: None
         mock_get.return_value.json = lambda: [future_event]
         assert _check_red_folder(now=now) is True
+
+
+def test_check_red_folder_returns_true_for_past_event_within_30min():
+    from decision_engine import _check_red_folder
+    now = EST.localize(datetime(2026, 7, 4, 10, 0))  # EDT in July: UTC-4
+    past_event = {"impact": "High", "date": "2026-07-04T09:45:00-04:00"}  # 15 min ago
+    with patch("decision_engine.httpx.get") as mock_get:
+        mock_get.return_value.raise_for_status = lambda: None
+        mock_get.return_value.json = lambda: [past_event]
+        assert _check_red_folder(now=now) is True
+
+
+def test_check_red_folder_returns_false_for_past_event_beyond_30min():
+    from decision_engine import _check_red_folder
+    now = EST.localize(datetime(2026, 7, 4, 10, 0))  # EDT in July: UTC-4
+    old_event = {"impact": "High", "date": "2026-07-04T09:00:00-04:00"}  # 60 min ago
+    with patch("decision_engine.httpx.get") as mock_get:
+        mock_get.return_value.raise_for_status = lambda: None
+        mock_get.return_value.json = lambda: [old_event]
+        assert _check_red_folder(now=now) is False
 
 
 def test_in_trading_window_accepts_exactly_1100():
