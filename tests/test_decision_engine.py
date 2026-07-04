@@ -76,6 +76,7 @@ def test_validate_fvg_too_small():
     bad = {**VALID_BUY, "fvg_top": 18352.25, "fvg_bottom": 18352.0}
     ok, reason = _validate_fvg(bad)
     assert ok is False
+    assert reason == "INVALID_STRUCTURE"
 
 
 def test_validate_fvg_sl_above_fvg_bottom_on_buy():
@@ -142,3 +143,19 @@ def test_check_red_folder_returns_false_when_no_high_impact():
         mock_get.return_value.raise_for_status = lambda: None
         mock_get.return_value.json = lambda: fake_events
         assert _check_red_folder() is False
+
+
+def test_check_red_folder_returns_true_when_high_impact_in_window():
+    from decision_engine import _check_red_folder
+    now = EST.localize(datetime(2026, 7, 4, 10, 0))  # EDT in July: UTC-4
+    future_event = {"impact": "High", "date": "2026-07-04T10:15:00-04:00"}
+    with patch("decision_engine.httpx.get") as mock_get:
+        mock_get.return_value.raise_for_status = lambda: None
+        mock_get.return_value.json = lambda: [future_event]
+        assert _check_red_folder(now=now) is True
+
+
+def test_in_trading_window_accepts_exactly_1100():
+    from decision_engine import _in_trading_window
+    t = datetime(2026, 7, 4, 11, 0, tzinfo=EST)
+    assert _in_trading_window(t) is True
