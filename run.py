@@ -8,6 +8,8 @@ import pytz
 import schedule
 import uvicorn
 
+from journal_writer import write_journal
+
 EST = pytz.timezone("America/New_York")
 
 
@@ -20,16 +22,17 @@ def _start_server() -> None:
     )
 
 
-def _maybe_write_journal() -> None:
+def _write_daily_journal() -> None:
+    from datetime import datetime
+    import pytz
+    EST = pytz.timezone("America/New_York")
     now = datetime.now(EST)
-    if now.hour == 11 and now.minute == 30:
-        from journal_writer import write_journal
-        print(f"[{now.strftime('%H:%M')} EST] Gerando diário de operações...")
-        try:
-            write_journal()
-            print("Diário atualizado com sucesso.")
-        except Exception as exc:
-            print(f"Erro ao gerar diário: {exc}")
+    print(f"[{now.strftime('%H:%M')} EST] Gerando diário de operações...")
+    try:
+        write_journal()
+        print("Diário atualizado com sucesso.")
+    except Exception as exc:
+        print(f"Erro ao gerar diário: {exc}")
 
 
 if __name__ == "__main__":
@@ -41,7 +44,7 @@ if __name__ == "__main__":
     server_thread = threading.Thread(target=_start_server, daemon=True)
     server_thread.start()
 
-    schedule.every(1).minutes.do(_maybe_write_journal)
+    schedule.every().day.at("11:30").do(_write_daily_journal)
 
     print("ICT Autonomous Trader em execução.")
     print("  Webhook server: http://localhost:8000")
@@ -51,6 +54,9 @@ if __name__ == "__main__":
     try:
         while True:
             schedule.run_pending()
+            if not server_thread.is_alive():
+                print("ERRO: Servidor encerrado inesperadamente. Saindo...")
+                sys.exit(1)
             time.sleep(10)
     except KeyboardInterrupt:
         print("\nSistema encerrado.")
