@@ -251,18 +251,16 @@ def test_red_folder_cache_avoids_second_call():
 def test_red_folder_cache_expires_after_ttl():
     from decision_engine import _check_red_folder
     import decision_engine
-    from datetime import datetime, timedelta
-    import pytz
-    EST = pytz.timezone("America/New_York")
-    decision_engine._rf_cache = None
+    from datetime import timedelta
+    t0 = EST.localize(datetime(2026, 7, 4, 10, 0))      # tempo fixo: cache criado
+    t1 = t0 + timedelta(minutes=16)                      # 16 min depois: TTL expirado
     fake_events = [{"impact": "Low", "date": "2026-07-04T10:00:00-04:00"}]
     with patch("decision_engine.httpx.get") as mock_get:
         mock_get.return_value.raise_for_status = lambda: None
         mock_get.return_value.json = lambda: fake_events
-        # Simula cache expirado: coloca timestamp 16 minutos atrás
-        decision_engine._rf_cache = (False, datetime.now(EST) - timedelta(minutes=16))
-        _check_red_folder()  # deve fazer nova chamada HTTP
-        assert mock_get.call_count == 1  # nova chamada feita
+        decision_engine._rf_cache = (False, t0)          # cache "expirado"
+        _check_red_folder(now=t1)                        # injeta t1 — garante expiração
+        assert mock_get.call_count == 1                  # nova chamada HTTP feita
 
 
 def test_red_folder_cache_stores_api_error_result():
