@@ -1,15 +1,15 @@
 import logging
+import math
 from datetime import datetime, timedelta
 import httpx
 import pytz
 from state_manager import get_stops_today
+from asset_params import get_asset_params
 
 logger = logging.getLogger("ict_trader")
 
 EST = pytz.timezone("America/New_York")
 FOREX_FACTORY_URL = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
-TICK_SIZE = 0.25        # NQ futures minimum tick
-MIN_FVG_TICKS = 2
 DAILY_STOP_LIMIT = 2
 
 
@@ -72,10 +72,16 @@ def _validate_fvg(payload: dict) -> tuple[bool, str]:
     fvg_top    = payload.get("fvg_top", 0.0)
     fvg_bottom = payload.get("fvg_bottom", 0.0)
     sl_level   = payload.get("sl_level", 0.0)
+    asset      = payload.get("asset", "")
+
+    params = get_asset_params(asset)
+    tick_size = params["tick_size"]
+    decimals = max(0, -math.floor(math.log10(tick_size)))
+    min_gap = round(params["min_fvg_ticks"] * tick_size, decimals)
 
     if fvg_top <= fvg_bottom:
         return False, "INVALID_STRUCTURE"
-    if (fvg_top - fvg_bottom) < (MIN_FVG_TICKS * TICK_SIZE):
+    if round(fvg_top - fvg_bottom, decimals) < min_gap:
         return False, "INVALID_STRUCTURE"
     if action == "BUY"  and sl_level >= fvg_bottom:
         return False, "INVALID_STRUCTURE"
