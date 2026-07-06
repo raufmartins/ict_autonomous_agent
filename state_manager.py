@@ -41,5 +41,29 @@ def record_trade(trade: dict) -> None:
     save_state(state)
 
 
+def close_trade(trade_index: int, result: str, r: float) -> dict:
+    if result not in ("WIN", "STOP"):
+        raise ValueError(f"result must be 'WIN' or 'STOP', got '{result}'")
+    if result == "WIN" and r <= 0:
+        raise ValueError(f"WIN trade must have r > 0, got {r}")
+    if result == "STOP" and r > 0:
+        raise ValueError(f"STOP trade must have r <= 0, got {r}")
+    state = load_state()
+    trades = state["trades_today"]
+    if not trades:
+        raise IndexError("no trades recorded today")
+    if trade_index < 0 or trade_index >= len(trades):
+        raise IndexError(f"trade_index {trade_index} out of range (0..{len(trades) - 1})")
+    trade = trades[trade_index]
+    if trade.get("result") in ("WIN", "STOP"):
+        raise ValueError("trade already closed")
+    if result == "STOP":
+        state["stops_today"] += 1
+    trade["result"] = result
+    trade["r"] = r
+    save_state(state)
+    return trade
+
+
 def get_stops_today() -> int:
     return load_state()["stops_today"]
