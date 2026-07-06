@@ -5,6 +5,15 @@ import pytest
 
 EST = pytz.timezone("America/New_York")
 
+
+@pytest.fixture(autouse=True)
+def reset_rf_cache():
+    """Limpa o cache do Red Folder antes de cada teste para evitar contaminação."""
+    import decision_engine
+    decision_engine._rf_cache = None
+    yield
+    decision_engine._rf_cache = None
+
 VALID_BUY = {
     "asset": "NQ1!",
     "action": "BUY",
@@ -223,3 +232,46 @@ def test_24h_mode_approved(mock_stops, mock_window, mock_rf):
     result = process_signal(payload, mode="24h")
     assert result["approved"] is True
     mock_window.assert_called_once_with(mode="24h")
+
+
+def test_red_folder_cache_avoids_second_call():
+    from decision_engine import _check_red_folder
+    import decision_engine
+    decision_engine._rf_cache = None  # limpa cache antes do teste
+    fake_events = [{"impact": "Low", "date": "2026-07-04T10:00:00-04:00"}]
+    with patch("decision_engine.httpx.get") as mock_get:
+        mock_get.return_value.raise_for_status = lambda: None
+        mock_get.return_value.json = lambda: fake_events
+        result1 = _check_red_folder()
+        result2 = _check_red_folder()  # segunda chamada deve usar cache
+        assert mock_get.call_count == 1  # HTTP chamado apenas uma vez
+        assert result1 == result2
+
+
+def test_red_folder_cache_expires_after_ttl():
+    from decision_engine import _check_red_folder
+    import decision_engine
+    from datetime import datetime, timedelta
+    import pytz
+    EST = pytz.timezone("America/New_York")
+    decision_engine._rf_cache = None
+    fake_events = [{"impact": "Low", "date": "2026-07-04T10:00:00-04:00"}]
+    with patch("decision_engine.httpx.get") as mock_get:
+        mock_get.return_value.raise_for_status = lambda: None
+        mock_get.return_value.json = lambda: fake_events
+        # Simula cache expirado: coloca timestamp 16 minutos atrás
+        decision_engine._rf_cache = (False, datetime.now(EST) - timedelta(minutes=16))
+        _check_red_folder()  # deve fazer nova chamada HTTP
+        assert mock_get.call_count == 1  # nova chamada feita
+
+
+def test_red_folder_cache_stores_api_error_result():
+    from decision_engine import _check_red_folder
+    import decision_engine
+    decision_engine._rf_cache = None
+    with patch("decision_engine.httpx.get", side_effect=Exception("timeout")):
+        result = _check_red_folder()
+        assert result is True  # fail-safe
+        assert decision_engine._rf_cache is not None  # cache foi populado
+        cached_val, _ = decision_engine._rf_cache
+        assert cached_val is True
