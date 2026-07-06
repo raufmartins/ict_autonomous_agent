@@ -13,5 +13,5 @@ def get_asset_params(asset: str) -> dict:
     upper = asset.upper()
     for prefix, params in _ASSET_TABLE:
         if upper.startswith(prefix):
-            return params
-    return _DEFAULT
+            return dict(params)
+    return dict(_DEFAULT)

@@ -72,7 +72,7 @@ def _validate_fvg(payload: dict) -> tuple[bool, str]:
     fvg_top    = payload.get("fvg_top", 0.0)
     fvg_bottom = payload.get("fvg_bottom", 0.0)
     sl_level   = payload.get("sl_level", 0.0)
-    asset      = payload.get("asset", "")
+    asset      = payload.get("asset") or ""
 
     params = get_asset_params(asset)
     tick_size = params["tick_size"]
