@@ -187,3 +187,39 @@ def test_in_trading_window_accepts_exactly_1100():
     from decision_engine import _in_trading_window
     t = datetime(2026, 7, 4, 11, 0, tzinfo=EST)
     assert _in_trading_window(t) is True
+
+
+def test_in_trading_window_24h_always_true():
+    from decision_engine import _in_trading_window
+    t = datetime(2026, 7, 6, 3, 0, tzinfo=EST)  # 3 AM — outside any normal window
+    assert _in_trading_window(t, mode="24h") is True
+
+
+def test_in_trading_window_daily_accepts_afternoon():
+    from decision_engine import _in_trading_window
+    t = datetime(2026, 7, 6, 14, 30, tzinfo=EST)  # 2:30 PM — inside daily window
+    assert _in_trading_window(t, mode="daily") is True
+
+
+def test_in_trading_window_daily_rejects_after_close():
+    from decision_engine import _in_trading_window
+    t = datetime(2026, 7, 6, 16, 1, tzinfo=EST)
+    assert _in_trading_window(t, mode="daily") is False
+
+
+def test_in_trading_window_daily_rejects_outside_intraday():
+    from decision_engine import _in_trading_window
+    t = datetime(2026, 7, 6, 13, 0, tzinfo=EST)  # 1 PM — outside intraday, inside daily
+    assert _in_trading_window(t, mode="intraday") is False
+    assert _in_trading_window(t, mode="daily") is True
+
+
+@patch("decision_engine._check_red_folder", return_value=False)
+@patch("decision_engine._in_trading_window", return_value=True)
+@patch("decision_engine.get_stops_today", return_value=0)
+def test_24h_mode_approved(mock_stops, mock_window, mock_rf):
+    from decision_engine import process_signal
+    payload = {**VALID_BUY}
+    result = process_signal(payload, mode="24h")
+    assert result["approved"] is True
+    mock_window.assert_called_once_with(mode="24h")

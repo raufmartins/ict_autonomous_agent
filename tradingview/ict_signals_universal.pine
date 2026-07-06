@@ -1,0 +1,108 @@
+//@version=5
+indicator("ICT Universal Signal Detector", overlay=true, max_labels_count=50)
+
+// ─── Mode ────────────────────────────────────────────────────────────────────
+mode = input.string("24h", "Mode", options=["intraday", "daily", "24h"],
+    tooltip="intraday: NQ 09:30-11:00 EST | daily: ES 09:30-16:00 EST | 24h: Crypto no window")
+
+// ─── Timeframe config ────────────────────────────────────────────────────────
+zonesTF = mode == "daily" ? "D" : "15"  // daily mode uses D1 for zones
+lookbackH = mode == "daily" ? 5 : 16   // weekly bars vs session bars
+lookbackL = mode == "daily" ? 5 : 12
+
+// ─── Liquidity Zones ─────────────────────────────────────────────────────────
+[zoneHigh1, zoneLow1] = request.security(syminfo.tickerid, zonesTF,
+    [ta.highest(high, lookbackH)[1], ta.lowest(low, lookbackH)[1]],
+    lookahead=barmerge.lookahead_on)
+
+[zoneHigh2, zoneLow2] = request.security(syminfo.tickerid, zonesTF,
+    [ta.highest(high, lookbackL)[1], ta.lowest(low, lookbackL)[1]],
+    lookahead=barmerge.lookahead_on)
+
+[pdh, pdl] = request.security(syminfo.tickerid, "D",
+    [high[1], low[1]],
+    lookahead=barmerge.lookahead_on)
+
+// ─── Sweep Detection ─────────────────────────────────────────────────────────
+sweepBullZone1  = low[1] < zoneLow1  and close[1] > zoneLow1
+sweepBullZone2  = low[1] < zoneLow2  and close[1] > zoneLow2
+sweepBullPDL    = low[1] < pdl       and close[1] > pdl
+
+sweepBearZone1  = high[1] > zoneHigh1 and close[1] < zoneHigh1
+sweepBearZone2  = high[1] > zoneHigh2 and close[1] < zoneHigh2
+sweepBearPDH    = high[1] > pdh       and close[1] < pdh
+
+anySweepBull = sweepBullZone1 or sweepBullZone2 or sweepBullPDL
+anySweepBear = sweepBearZone1 or sweepBearZone2 or sweepBearPDH
+
+// ─── Displacement ────────────────────────────────────────────────────────────
+bodySize   = math.abs(close - open)
+totalRange = high - low
+isDispBull = close > open and totalRange > 0 and (bodySize / totalRange) >= 0.70
+isDispBear = close < open and totalRange > 0 and (bodySize / totalRange) >= 0.70
+
+// ─── FVG ─────────────────────────────────────────────────────────────────────
+fvgBullTop    = low[0]
+fvgBullBottom = high[2]
+hasFVGBull    = fvgBullTop > fvgBullBottom
+
+fvgBearTop    = low[2]
+fvgBearBottom = high[0]
+hasFVGBear    = fvgBearTop > fvgBearBottom
+
+// ─── Signal ──────────────────────────────────────────────────────────────────
+buySignal  = anySweepBull[1] and isDispBull[1] and hasFVGBull
+sellSignal = anySweepBear[1] and isDispBear[1] and hasFVGBear
+
+// ─── Zone Labels ─────────────────────────────────────────────────────────────
+zoneHitBuy  = sweepBullZone1[1] ? "zone1_low"  :
+              sweepBullZone2[1] ? "zone2_low"  :
+              sweepBullPDL[1]   ? "pdl"        : "unknown"
+
+zoneHitSell = sweepBearZone1[1] ? "zone1_high" :
+              sweepBearZone2[1] ? "zone2_high" :
+              sweepBearPDH[1]   ? "pdh"        : "unknown"
+
+sweepLevelBuy  = sweepBullZone1[1] ? zoneLow1  :
+                 sweepBullZone2[1] ? zoneLow2  :
+                 sweepBullPDL[1]   ? pdl        : na
+
+sweepLevelSell = sweepBearZone1[1] ? zoneHigh1 :
+                 sweepBearZone2[1] ? zoneHigh2 :
+                 sweepBearPDH[1]   ? pdh        : na
+
+slBuy  = ta.lowest(low,  3) - syminfo.mintick * 2
+slSell = ta.highest(high, 3) + syminfo.mintick * 2
+
+// ─── Visuals ─────────────────────────────────────────────────────────────────
+plotshape(buySignal,  title="BUY",  style=shape.triangleup,
+          location=location.belowbar, color=color.green, size=size.normal)
+plotshape(sellSignal, title="SELL", style=shape.triangledown,
+          location=location.abovebar, color=color.red,   size=size.normal)
+
+// ─── Alerts ──────────────────────────────────────────────────────────────────
+if buySignal
+    alert(
+        '{"asset":"'    + syminfo.ticker              + '",' +
+        '"action":"BUY",'                                    +
+        '"zone_hit":"'  + zoneHitBuy                  + '",' +
+        '"sweep_level":' + str.tostring(sweepLevelBuy) + ',' +
+        '"fvg_top":'    + str.tostring(fvgBullTop)     + ',' +
+        '"fvg_bottom":' + str.tostring(fvgBullBottom)  + ',' +
+        '"sl_level":'   + str.tostring(slBuy)          + ',' +
+        '"mode":"'      + mode                         + '"}',
+        alert.freq_once_per_bar_close
+    )
+
+if sellSignal
+    alert(
+        '{"asset":"'    + syminfo.ticker               + '",' +
+        '"action":"SELL",'                                    +
+        '"zone_hit":"'  + zoneHitSell                  + '",' +
+        '"sweep_level":' + str.tostring(sweepLevelSell) + ',' +
+        '"fvg_top":'    + str.tostring(fvgBearTop)      + ',' +
+        '"fvg_bottom":' + str.tostring(fvgBearBottom)   + ',' +
+        '"sl_level":'   + str.tostring(slSell)          + ',' +
+        '"mode":"'      + mode                          + '"}',
+        alert.freq_once_per_bar_close
+    )

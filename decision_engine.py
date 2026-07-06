@@ -13,10 +13,10 @@ MIN_FVG_TICKS = 2
 DAILY_STOP_LIMIT = 2
 
 
-def process_signal(payload: dict) -> dict:
+def process_signal(payload: dict, mode: str = "intraday") -> dict:
     if payload.get("action") not in {"BUY", "SELL"}:
         return {"approved": False, "reason": "INVALID_ACTION"}
-    if not _in_trading_window():
+    if not _in_trading_window(mode=mode):
         return {"approved": False, "reason": "OUTSIDE_WINDOW"}
     if _check_red_folder():
         return {"approved": False, "reason": "RED_FOLDER"}
@@ -52,9 +52,16 @@ def _check_red_folder(now: datetime = None) -> bool:
     return False
 
 
-def _in_trading_window(now: datetime = None) -> bool:
+def _in_trading_window(now: datetime = None, mode: str = "intraday") -> bool:
+    if mode == "24h":
+        return True
     if now is None:
         now = datetime.now(EST)
+    if mode == "daily":
+        start = now.replace(hour=9, minute=30, second=0, microsecond=0)
+        end   = now.replace(hour=16, minute=0,  second=0, microsecond=0)
+        return start <= now <= end
+    # intraday (default)
     start = now.replace(hour=9, minute=30, second=0, microsecond=0)
     end   = now.replace(hour=11, minute=0,  second=0, microsecond=0)
     return start <= now <= end

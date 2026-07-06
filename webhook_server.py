@@ -34,6 +34,7 @@ class SignalPayload(BaseModel):
     fvg_bottom: float
     sl_level: float
     timestamp: datetime = None
+    mode: str = "intraday"   # "intraday" | "daily" | "24h"
 
     def model_post_init(self, __context):
         if self.timestamp is None:
@@ -44,13 +45,14 @@ class SignalPayload(BaseModel):
 async def receive_signal(payload: SignalPayload):
     _configure_logging()
     data = payload.model_dump()
-    result = process_signal(data)
+    result = process_signal(data, mode=payload.mode)
 
     logger.info(
-        "signal asset=%s action=%s zone=%s approved=%s reason=%s",
+        "signal asset=%s action=%s zone=%s mode=%s approved=%s reason=%s",
         payload.asset.replace("\n", ""),
         payload.action.replace("\n", ""),
         payload.zone_hit.replace("\n", ""),
+        payload.mode,
         result["approved"],
         result["reason"],
     )
