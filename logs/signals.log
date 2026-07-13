@@ -1,6 +1,0 @@
-2026-07-04 14:03:18,621 signal asset=NQ1! action=BUY zone=london_low approved=True reason=APPROVED
-2026-07-04 14:03:18,622 HTTP Request: POST http://testserver/signal "HTTP/1.1 200 OK"
-2026-07-04 14:42:38,071 signal asset=NQ1! action=BUY zone=london_low approved=False reason=OUTSIDE_WINDOW
-2026-07-06 09:09:35,144 signal asset=ETHUSD action=BUY zone=zone1_low mode=24h approved=True reason=APPROVED
-2026-07-06 09:09:35,162 signal asset=ES1! action=SELL zone=zone1_high mode=daily approved=False reason=OUTSIDE_WINDOW
-2026-07-06 09:09:35,205 signal asset=NQ1! action=BUY zone=london_low mode=intraday approved=False reason=OUTSIDE_WINDOW
