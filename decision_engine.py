@@ -64,6 +64,28 @@ def _check_red_folder(now: datetime = None) -> bool:
     return result
 
 
+def get_current_session(now: datetime = None) -> str:
+    if now is None:
+        now = datetime.now(EST)
+    hour = now.hour
+    
+    # Nova York: 08:00 às 17:00
+    if 8 <= hour < 17:
+        if hour < 11:
+            return "NOVA_YORK_E_LONDRES (OVERLAP)"
+        return "NOVA_YORK"
+    
+    # Londres: 02:00 às 08:00 (pois depois entra NY)
+    if 2 <= hour < 8:
+        return "LONDRES"
+        
+    # Ásia (Tóquio/Singapura): 19:00 às 02:00
+    if hour >= 19 or hour < 2:
+        return "ASIA (TOQUIO/SINGAPURA)"
+        
+    return "FECHADO"
+
+
 def _in_trading_window(now: datetime = None, mode: str = "intraday") -> bool:
     if mode == "24h":
         return True
@@ -73,10 +95,10 @@ def _in_trading_window(now: datetime = None, mode: str = "intraday") -> bool:
         start = now.replace(hour=9, minute=30, second=0, microsecond=0)
         end   = now.replace(hour=16, minute=0,  second=0, microsecond=0)
         return start <= now <= end
-    # intraday (default)
-    start = now.replace(hour=9, minute=30, second=0, microsecond=0)
-    end   = now.replace(hour=11, minute=0,  second=0, microsecond=0)
-    return start <= now <= end
+    
+    # intraday (agora opera nas sessões globais)
+    session = get_current_session(now)
+    return session != "FECHADO"
 
 
 def _validate_fvg(payload: dict) -> tuple[bool, str]:

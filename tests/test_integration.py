@@ -47,7 +47,7 @@ def test_approved_signal_updates_state(mock_window, mock_rf, full_client):
     trade = state["trades_today"][0]
     assert trade["action"] == "BUY"
     assert trade["zone_hit"] == "london_low"
-    assert trade["result"] == "OPEN"
+    assert trade["result"] == "PENDING_AI"
 
     log_content = (tmp_path / "signals.log").read_text()
     assert "BUY" in log_content

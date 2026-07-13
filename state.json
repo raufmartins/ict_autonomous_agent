@@ -1,0 +1,16 @@
+{
+  "date": "2026-07-06",
+  "stops_today": 0,
+  "trades_today": [
+    {
+      "time": "12:09",
+      "action": "BUY",
+      "zone_hit": "zone1_low",
+      "fvg_top": 3460.0,
+      "fvg_bottom": 3452.0,
+      "sl_level": 3448.0,
+      "result": "OPEN",
+      "r": 0.0
+    }
+  ]
+}

@@ -2,11 +2,12 @@ import logging
 import os
 from datetime import datetime, timezone
 
-from fastapi import FastAPI
+from fastapi import FastAPI, BackgroundTasks
 from pydantic import BaseModel
 
 from decision_engine import process_signal
-from state_manager import record_trade
+from state_manager import record_trade, close_trade
+from autonomous_ict_trader import evaluate_and_execute_signal
 
 LOG_FILE = os.path.join(os.path.dirname(__file__), "logs", "signals.log")
 
@@ -42,7 +43,7 @@ class SignalPayload(BaseModel):
 
 
 @app.post("/signal")
-async def receive_signal(payload: SignalPayload):
+async def receive_signal(payload: SignalPayload, background_tasks: BackgroundTasks):
     _configure_logging()
     data = payload.model_dump()
     result = process_signal(data, mode=payload.mode)
@@ -65,11 +66,27 @@ async def receive_signal(payload: SignalPayload):
             "fvg_top":    payload.fvg_top,
             "fvg_bottom": payload.fvg_bottom,
             "sl_level":   payload.sl_level,
-            "result":     "OPEN",
+            "result":     "PENDING_AI",
             "r":          0.0,
         })
+        background_tasks.add_task(evaluate_and_execute_signal, data)
 
     return {"status": "ok", **result}
+
+
+class CloseTradePayload(BaseModel):
+    trade_index: int
+    result: str
+    r: float
+
+
+@app.post("/trade/close")
+async def close_trade_endpoint(payload: CloseTradePayload):
+    try:
+        trade = close_trade(payload.trade_index, payload.result, payload.r)
+    except (IndexError, ValueError) as exc:
+        return {"status": "error", "reason": str(exc)}
+    return {"status": "ok", "trade": trade}
 
 
 @app.get("/health")

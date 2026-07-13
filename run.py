@@ -9,6 +9,7 @@ import schedule
 import uvicorn
 
 from journal_writer import write_journal
+from poller import run_poll_loop
 
 EST = pytz.timezone("America/New_York")
 
@@ -25,14 +26,20 @@ def _start_server() -> None:
 def _write_daily_journal() -> None:
     from datetime import datetime
     import pytz
+    import asyncio
+    from research_agent import conduct_daily_research
+
     EST = pytz.timezone("America/New_York")
     now = datetime.now(EST)
     print(f"[{now.strftime('%H:%M')} EST] Gerando diário de operações...")
     try:
         write_journal()
         print("Diário atualizado com sucesso.")
+        
+        # Dispara o Head Trader (Claude) para pesquisar e melhorar os manuais
+        asyncio.run(conduct_daily_research())
     except Exception as exc:
-        print(f"Erro ao gerar diário: {exc}")
+        print(f"Erro na rotina de fechamento (Diário/Pesquisa): {exc}")
 
 
 if __name__ == "__main__":
@@ -44,10 +51,14 @@ if __name__ == "__main__":
     server_thread = threading.Thread(target=_start_server, daemon=True)
     server_thread.start()
 
+    poller_thread = threading.Thread(target=run_poll_loop, daemon=True, name="ict-poller")
+    poller_thread.start()
+
     schedule.every().day.at("11:30").do(_write_daily_journal)
 
     print("ICT Autonomous Trader em execução.")
     print("  Webhook server: http://localhost:8000")
+    print("  Poller Binance:  30 s — BTCUSDT ETHUSDT SOLUSDT XRPUSDT BNBUSDT")
     print("  Diário gerado às 11:30 AM EST")
     print("  Pressione Ctrl+C para parar.\n")
 

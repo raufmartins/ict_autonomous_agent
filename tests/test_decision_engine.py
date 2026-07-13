@@ -35,7 +35,7 @@ VALID_SELL = {
 }
 
 _INSIDE  = datetime(2026, 7, 4, 10, 15, tzinfo=EST)
-_OUTSIDE = datetime(2026, 7, 4,  8,  0, tzinfo=EST)
+_OUTSIDE = datetime(2026, 7, 4, 17, 30, tzinfo=EST)  # 17:30 is FECHADO
 
 
 def test_in_trading_window_accepts_inside():
@@ -56,7 +56,7 @@ def test_in_trading_window_accepts_boundary_start():
 
 def test_in_trading_window_rejects_boundary_end():
     from decision_engine import _in_trading_window
-    t = datetime(2026, 7, 4, 11, 1, tzinfo=EST)
+    t = datetime(2026, 7, 4, 18, 59, tzinfo=EST)  # just before ASIA opens
     assert _in_trading_window(t) is False
 
 
@@ -216,10 +216,10 @@ def test_in_trading_window_daily_rejects_after_close():
     assert _in_trading_window(t, mode="daily") is False
 
 
-def test_in_trading_window_daily_rejects_outside_intraday():
+def test_in_trading_window_daily_accepts_afternoon_intraday():
     from decision_engine import _in_trading_window
-    t = datetime(2026, 7, 6, 13, 0, tzinfo=EST)  # 1 PM — outside intraday, inside daily
-    assert _in_trading_window(t, mode="intraday") is False
+    t = datetime(2026, 7, 6, 13, 0, tzinfo=EST)  # 1 PM — inside NY session
+    assert _in_trading_window(t, mode="intraday") is True
     assert _in_trading_window(t, mode="daily") is True
 
 
