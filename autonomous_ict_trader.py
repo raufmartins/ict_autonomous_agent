@@ -24,7 +24,7 @@ from asset_params import get_asset_params
 logger = logging.getLogger("ict_trader")
 
 _PLAYBOOKS_DIR = os.path.join(os.path.dirname(__file__), "docs", "playbooks")
-_MODEL = "gemini-1.5-pro"
+_MODEL = "gemini-2.5-flash"
 
 
 # ── Knowledge Base Tools ──────────────────────────────────────────────────────
