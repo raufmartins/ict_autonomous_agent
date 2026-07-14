@@ -12,6 +12,7 @@ build/
 # Runtime state
 state.json
 logs/
+data/
 
 # Environment
 .env

@@ -14,6 +14,11 @@ lookbackL = mode == "daily" ? 5 : 12
 [zoneHigh2, zoneLow2] = request.security(syminfo.tickerid, zonesTF, [ta.highest(high, lookbackL)[1], ta.lowest(low, lookbackL)[1]], lookahead=barmerge.lookahead_on)
 [pdh, pdl]            = request.security(syminfo.tickerid, "D",     [high[1], low[1]],                                              lookahead=barmerge.lookahead_on)
 
+// == Daily Bias (HTF Narrative) ==
+dailyEma200 = request.security(syminfo.tickerid, "D", ta.ema(close, 200), lookahead=barmerge.lookahead_on)
+dailyClose  = request.security(syminfo.tickerid, "D", close, lookahead=barmerge.lookahead_on)
+dailyBias   = dailyClose > dailyEma200 ? "BULLISH" : "BEARISH"
+
 // == Sweep Detection ==
 sweepBullZone1 = low[1] < zoneLow1  and close[1] > zoneLow1
 sweepBullZone2 = low[1] < zoneLow2  and close[1] > zoneLow2
@@ -61,7 +66,7 @@ plotshape(sellSignal, title="SELL", style=shape.triangledown,  location=location
 
 // == Alerts ==
 if buySignal
-    alert('{"asset":"' + syminfo.ticker + '","action":"BUY","zone_hit":"' + zoneHitBuy + '","sweep_level":' + str.tostring(sweepLevelBuy) + ',"fvg_top":' + str.tostring(fvgBullTop) + ',"fvg_bottom":' + str.tostring(fvgBullBottom) + ',"sl_level":' + str.tostring(slBuy) + ',"mode":"' + mode + '"}', alert.freq_once_per_bar_close)
+    alert('{"asset":"' + syminfo.ticker + '","action":"BUY","zone_hit":"' + zoneHitBuy + '","sweep_level":' + str.tostring(sweepLevelBuy) + ',"fvg_top":' + str.tostring(fvgBullTop) + ',"fvg_bottom":' + str.tostring(fvgBullBottom) + ',"sl_level":' + str.tostring(slBuy) + ',"mode":"' + mode + '","daily_bias":"' + dailyBias + '"}', alert.freq_once_per_bar_close)
 
 if sellSignal
-    alert('{"asset":"' + syminfo.ticker + '","action":"SELL","zone_hit":"' + zoneHitSell + '","sweep_level":' + str.tostring(sweepLevelSell) + ',"fvg_top":' + str.tostring(fvgBearTop) + ',"fvg_bottom":' + str.tostring(fvgBearBottom) + ',"sl_level":' + str.tostring(slSell) + ',"mode":"' + mode + '"}', alert.freq_once_per_bar_close)
+    alert('{"asset":"' + syminfo.ticker + '","action":"SELL","zone_hit":"' + zoneHitSell + '","sweep_level":' + str.tostring(sweepLevelSell) + ',"fvg_top":' + str.tostring(fvgBearTop) + ',"fvg_bottom":' + str.tostring(fvgBearBottom) + ',"sl_level":' + str.tostring(slSell) + ',"mode":"' + mode + '","daily_bias":"' + dailyBias + '"}', alert.freq_once_per_bar_close)
