@@ -144,10 +144,11 @@ def detect_ict_signal(
         elif sweep_bull_z2:     zone_hit, sweep_level = "zone2_low",  zone_low2
         else:                   zone_hit, sweep_level = "pdl",        pdl
         sl = min(l(i) for i in range(3)) - mint * 2
+        target = pdh if zone_hit == "pdl" else zone_high1
         return dict(
             action="BUY", zone_hit=zone_hit, sweep_level=sweep_level,
             fvg_top=fvg_bull_top, fvg_bottom=fvg_bull_bottom,
-            sl_level=sl, mode=mode,
+            sl_level=sl, target_level=target, mode=mode,
         )
 
     # sell_signal
@@ -155,8 +156,9 @@ def detect_ict_signal(
     elif sweep_bear_z2:     zone_hit, sweep_level = "zone2_high", zone_high2
     else:                   zone_hit, sweep_level = "pdh",        pdh
     sl = max(h(i) for i in range(3)) + mint * 2
+    target = pdl if zone_hit == "pdh" else zone_low1
     return dict(
         action="SELL", zone_hit=zone_hit, sweep_level=sweep_level,
         fvg_top=fvg_bear_top, fvg_bottom=fvg_bear_bottom,
-        sl_level=sl, mode=mode,
+        sl_level=sl, target_level=target, mode=mode,
     )

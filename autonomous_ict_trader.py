@@ -113,6 +113,11 @@ def _build_prompt(payload: dict) -> str:
     params = get_asset_params(asset)
     session = get_current_session()
 
+    target = payload.get("target_level")
+    entry  = round((payload.get("fvg_top", 0) + payload.get("fvg_bottom", 0)) / 2, 8)
+    sl     = payload.get("sl_level", 0)
+    rr     = round(abs(target - entry) / abs(entry - sl), 2) if target and sl and entry != sl else "N/A"
+
     return f"""Você é o Auditor Autônomo ICT. Um sinal passou pelos filtros mecânicos e aguarda sua aprovação final.
 
 SINAL DETECTADO:
@@ -122,7 +127,10 @@ SINAL DETECTADO:
   Sweep Level:  {payload.get("sweep_level")}
   FVG Topo:     {payload.get("fvg_top")}
   FVG Fundo:    {payload.get("fvg_bottom")}
-  Stop Loss:    {payload.get("sl_level")}
+  Entrada (mid):{entry}
+  Stop Loss:    {sl}
+  Alvo:         {target if target else "não informado"}
+  R/R estimado: {rr}
   Timestamp:    {payload.get("timestamp")}
   Sessão:       {session}
   Tick Size:    {params.get("tick_size")}
@@ -170,17 +178,60 @@ def _run_evaluation(payload: dict) -> None:
     model = genai.GenerativeModel(
         model_name=_MODEL,
         tools=_TOOLS,
+        generation_config=genai.types.GenerationConfig(temperature=0),
     )
-    chat = model.start_chat(enable_automatic_function_calling=True)
 
-    try:
-        response = chat.send_message(_build_prompt(payload))
-        logger.info(
-            "====== AUDITORIA IA | %s %s ======\n%s\n========================================",
-            payload.get("action"), payload.get("asset"), response.text,
-        )
-    except Exception as e:
-        logger.error("Erro na auditoria Gemini: %s", e)
+    import re as _re, time as _time
+
+    prompt = _build_prompt(payload)
+    chat = None
+    for attempt in range(1, 4):
+        chat = model.start_chat(enable_automatic_function_calling=True)
+        try:
+            chat.send_message(prompt)
+            break
+        except Exception as exc:
+            err = str(exc)
+            if "MALFORMED_FUNCTION_CALL" in err and attempt < 3:
+                logger.warning("MALFORMED_FUNCTION_CALL — retentativa %d/3", attempt)
+                chat = None
+                continue
+            if "429" in err:
+                m = _re.search(r"seconds:\s*(\d+)", err)
+                wait = int(m.group(1)) + 2 if m else 60
+                if wait > 120:  # daily quota — não faz sentido aguardar
+                    logger.warning("Quota diária Gemini atingida (%d req/dia). Auditoria adiada.", 20)
+                    return
+                logger.warning("Rate limit Gemini — aguardando %ds (tentativa %d/3)", wait, attempt)
+                _time.sleep(wait)
+                chat = None
+                continue
+            logger.error("Erro na auditoria Gemini: %s", exc)
+            return
+
+    if chat is None:
+        logger.error("Auditoria falhou após retentativas.")
+        return
+
+    # Build full turn-by-turn transcript from chat history
+    lines = [f"====== AUDITORIA IA | {payload.get('action')} {payload.get('asset')} ======"]
+    for turn in chat.history:
+        role = getattr(turn, "role", "?").upper()
+        for part in getattr(turn, "parts", []):
+            fn_call = getattr(part, "function_call", None)
+            fn_resp = getattr(part, "function_response", None)
+            text = getattr(part, "text", None)
+            if fn_call:
+                args = dict(fn_call.args) if fn_call.args else {}
+                lines.append(f"  [{role}] → tool_call: {fn_call.name}({args})")
+            elif fn_resp:
+                resp_val = dict(fn_resp.response) if fn_resp.response else {}
+                snippet = str(resp_val.get("result", resp_val))[:300]
+                lines.append(f"  [{role}] ← tool_result: {fn_resp.name} | {snippet}")
+            elif text and text.strip():
+                lines.append(f"  [{role}] {text.strip()}")
+    lines.append("========================================")
+    logger.info("\n".join(lines))
 
 
 async def evaluate_and_execute_signal(payload: dict) -> None:
