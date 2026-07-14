@@ -62,8 +62,20 @@ def close_trade(trade_index: int, result: str, r: float) -> dict:
     trade["result"] = result
     trade["r"] = r
     save_state(state)
+    if result == "WIN":
+        try:
+            from rag_store import save_win_trade
+            save_win_trade(trade)
+        except Exception:
+            pass
     return trade
 
 
 def get_stops_today() -> int:
     return load_state()["stops_today"]
+
+
+def get_recent_trades(asset: str, limit: int = 3) -> list[dict]:
+    state = load_state()
+    trades = [t for t in state.get("trades_today", []) if t.get("asset") == asset]
+    return trades[-limit:] if trades else []

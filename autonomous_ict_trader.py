@@ -18,8 +18,9 @@ except ImportError:
     _GENAI_AVAILABLE = False
 
 from decision_engine import _check_red_folder, get_current_session
-from state_manager import record_trade
+from state_manager import record_trade, get_recent_trades
 from asset_params import get_asset_params
+from rag_store import query_similar_wins
 
 logger = logging.getLogger("ict_trader")
 
@@ -112,11 +113,32 @@ def _build_prompt(payload: dict) -> str:
     asset = payload.get("asset", "UNKNOWN")
     params = get_asset_params(asset)
     session = get_current_session()
+    daily_bias = payload.get("daily_bias", "NÃO INFORMADO")
+    recent_trades = get_recent_trades(asset, limit=3)
+    
+    memory_str = "Sem registros recentes hoje."
+    if recent_trades:
+        memory_str = "\n".join([
+            f"  - Trade às {t.get('time')} | Ação: {t.get('action')} | Resultado: {t.get('result')}" 
+            for t in recent_trades
+        ])
 
     target = payload.get("target_level")
     entry  = round((payload.get("fvg_top", 0) + payload.get("fvg_bottom", 0)) / 2, 8)
     sl     = payload.get("sl_level", 0)
     rr     = round(abs(target - entry) / abs(entry - sl), 2) if target and sl and entry != sl else "N/A"
+
+    # RAG — 3 setups WIN mais similares da memória histórica
+    similar = query_similar_wins(payload, n=3)
+    if similar:
+        rag_str = "\n".join([
+            f"  [{i+1}] {t.get('asset')} {t.get('action')} | Zona: {t.get('zone_hit','')} | "
+            f"Sessão: {t.get('session','')} | R: {t.get('r','')} | "
+            f"Justificativa: {t.get('justification','')[:180]}"
+            for i, t in enumerate(similar)
+        ])
+    else:
+        rag_str = "  Banco de dados histórico ainda vazio. Primeiros trades WIN serão armazenados automaticamente."
 
     return f"""Você é o Auditor Autônomo ICT. Um sinal passou pelos filtros mecânicos e aguarda sua aprovação final.
 
@@ -132,8 +154,20 @@ SINAL DETECTADO:
   Alvo:         {target if target else "não informado"}
   R/R estimado: {rr}
   Timestamp:    {payload.get("timestamp")}
-  Sessão:       {session}
-  Tick Size:    {params.get("tick_size")}
+
+CONTEXTO DO MERCADO:
+  Sessão de Negociação (Volume): {session}
+  Viés Diário (Narrativa HTF): {daily_bias}
+
+MEMÓRIA DE CURTO PRAZO (Últimos trades neste ativo hoje):
+{memory_str}
+
+CONTEXTO HISTÓRICO DE ALTA PROBABILIDADE (RAG — 3 setups WIN mais similares):
+{rag_str}
+
+PARÂMETROS MULTI-ATIVOS (Regras Específicas do Ativo {asset}):
+  Tick Size: {params.get("tick_size")}
+  Mínimo FVG Ticks: {params.get("min_fvg_ticks")}
 
 PROTOCOLO DE AUDITORIA (execute em ordem, sem pular etapas):
 
